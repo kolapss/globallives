@@ -26,7 +26,7 @@ public class PlayerInteractionHandler {
                 ServerWorld serverWorld = (ServerWorld) player.level;
                 serverWorld.getServer().getCommands().performCommand(
                     serverWorld.getServer().createCommandSourceStack(),
-                    "give " + player.getName().getString() + " minecraft:diamond"
+                    "function ad:live_mech"
                 );
 
                 // Cancel further processing of the event

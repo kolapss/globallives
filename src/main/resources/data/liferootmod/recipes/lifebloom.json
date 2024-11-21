@@ -1,0 +1,18 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern": [
+      "LLL",
+      "LLL",
+      "LLL"
+    ],
+    "key": {
+      "L": {
+        "item": "globallives:liferoot"
+      }
+    },
+    "result": {
+      "item": "globallives:lifebloom",
+      "count": 1
+    }
+  }
+  

@@ -18,7 +18,9 @@ public class LifeRootMod {
     public static final Item EternalScroll = new EternalScrollItem(new Item.Properties().tab(ItemGroup.TAB_MISC));
     public LifeRootMod() {
         MinecraftForge.EVENT_BUS.register(this);
+        MinecraftForge.EVENT_BUS.register(new PlayerLivesManager());
     }
+    
 
     @SubscribeEvent
     public void onAdvancement(AdvancementEvent event) {

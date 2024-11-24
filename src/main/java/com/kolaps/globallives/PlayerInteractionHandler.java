@@ -26,7 +26,7 @@ public class PlayerInteractionHandler {
                 ServerWorld serverWorld = (ServerWorld) player.level;
                 serverWorld.getServer().getCommands().performCommand(
                     serverWorld.getServer().createCommandSourceStack(),
-                    "function ad:live_mech"
+                    "scoreboard players remove " + player.getName().getString() + " ad.boolDeath 1"
                 );
 
                 // Cancel further processing of the event

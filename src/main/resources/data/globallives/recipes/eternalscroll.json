@@ -7,11 +7,11 @@
     ],
     "key": {
       "L": {
-        "item": "globallives:liferoot"
+        "item": "globallives:etherealpage"
       }
     },
     "result": {
-      "item": "globallives:lifebloom",
+      "item": "globallives:eternalscroll",
       "count": 1
     }
   }

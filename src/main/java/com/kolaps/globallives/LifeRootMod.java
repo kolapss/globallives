@@ -14,9 +14,8 @@ import net.minecraftforge.fml.common.Mod;
 @Mod(LifeRootMod.MOD_ID)
 public class LifeRootMod {
     public static final String MOD_ID = "globallives";
-    public static final Item LIFE_ROOT = new Item(new Item.Properties().tab(ItemGroup.TAB_MISC));
-    public static final Item LIFEBLOOM = new Item(new Item.Properties().tab(ItemGroup.TAB_MISC));
-
+    public static final Item EtherealPage = new EtherealPageItem(new Item.Properties().tab(ItemGroup.TAB_MISC));
+    public static final Item EternalScroll = new EternalScrollItem(new Item.Properties().tab(ItemGroup.TAB_MISC));
     public LifeRootMod() {
         MinecraftForge.EVENT_BUS.register(this);
     }
@@ -30,7 +29,7 @@ public class LifeRootMod {
             // Фильтрация: исключаем рецепты
             if (!id.getNamespace().equals("minecraft") || !id.getPath().startsWith("recipes")) {
                 // Выдаем предмет за каждое уникальное достижение
-                event.getPlayer().addItem(new ItemStack(LIFE_ROOT, 1));
+                event.getPlayer().addItem(new ItemStack(EtherealPage, 1));
             }
         }
     }

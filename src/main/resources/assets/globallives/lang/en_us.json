@@ -1,4 +1,6 @@
 {
-    "item.globallives.liferoot": "LifeRoot",
-    "item.globallives.lifebloom": "Lifebloom"
+    "item.globallives.etherealpage": "§bEthereal page",
+    "item.globallives.etherealpage.tooltip": "A fragment of ancient magic, untethered by time and space, carrying glimpses of power. Collecting nine such pages allows the creation of a scroll that bestows the Essence of Life.",
+    "item.globallives.eternalscroll": "§5Eternal scroll",
+    "item.globallives.eternalscroll.tooltip": "An ancient scroll imbued with mystical energy, capable of restoring one precious essence life"
 }

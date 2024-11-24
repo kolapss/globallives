@@ -18,7 +18,7 @@ public class PlayerInteractionHandler {
             ItemStack heldItem = event.getItemStack();
 
             // Check if the player is holding the Lifebloom item
-            if (heldItem.getItem() == LifeRootMod.LIFEBLOOM) {
+            if (heldItem.getItem() == LifeRootMod.EternalScroll) {
                 // Decrease the Lifebloom count by 1
                 heldItem.shrink(1);
 

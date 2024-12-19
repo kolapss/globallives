@@ -22,9 +22,9 @@ import net.minecraftforge.fml.common.Mod;
 public class LifeRootMod {
     public static final String MOD_ID = "globallives"; // ID мода
     public static final String LIVES_TAG = "GlobalLives"; // Тег для хранения данных о жизнях
-    private static final int INITIAL_LIVES = 3; // Количество жизней по умолчанию
     public static final Item EtherealPage = new EtherealPageItem(new Item.Properties().tab(ItemGroup.TAB_MISC));
     public static final Item EternalScroll = new EternalScrollItem(new Item.Properties().tab(ItemGroup.TAB_MISC));
+    public static final ManageLives lives = new ManageLives();
 
     public LifeRootMod() {
         // Регистрация событий
@@ -32,77 +32,7 @@ public class LifeRootMod {
 
     }
 
-    public static void updatePlayerLives(PlayerEntity player, int lives) {
-        if (!player.level.isClientSide) {
-            // Получение Scoreboard
-            Scoreboard scoreboard = player.getScoreboard();
-
-            // Создание или получение Objectives для жизней
-            ScoreObjective livesObjective = scoreboard.getObjective(LIVES_TAG);
-            if (livesObjective == null) {
-                livesObjective = scoreboard.addObjective(
-                        LIVES_TAG,
-                        ScoreCriteria.DUMMY,
-                        new StringTextComponent("Global Lives"),
-                        ScoreCriteria.RenderType.INTEGER);
-            }
-
-            // Установка значения
-            Score score = scoreboard.getOrCreatePlayerScore(player.getName().getString(), livesObjective);
-            score.setScore(lives);
-        }
-    }
-
-    public static int getPlayerLivesFromScoreboard(PlayerEntity player) {
-        Scoreboard scoreboard = player.getScoreboard();
-        ScoreObjective livesObjective = scoreboard.getObjective(LIVES_TAG);
-
-        if (livesObjective != null) {
-            Score score = scoreboard.getOrCreatePlayerScore(player.getName().getString(), livesObjective);
-            return score.getScore();
-        }
-
-        return -1; // Возвращаем начальное значение, если Objective отсутствует
-    }
-
-    @SubscribeEvent
-    public void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
-        PlayerEntity player = event.getPlayer();
-        ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
-        MinecraftServer server = serverPlayer.server;
-
-        if (!player.level.isClientSide) {
-
-            // Если данных о жизнях нет, задаём значение по умолчанию
-            // int lives = getPlayerLivesFromScoreboard(player)==-1 ?
-            // ServerEvents.executeCommandOnServer(server,"scoreboard objectives setdisplay
-            // list ad.Lives") : INITIAL_LIVES;
-            if (getPlayerLivesFromScoreboard(player) == -1) {
-                updatePlayerLives(player, INITIAL_LIVES);
-                ServerEvents.executeCommandOnServer(server, "scoreboard objectives setdisplay list " + LIVES_TAG);
-            }
-        }
-    }
-
-    @SubscribeEvent
-    public void onPlayerDeath(LivingDeathEvent event) {
-        Entity entity = event.getEntity();
-        if (entity instanceof PlayerEntity) {
-            PlayerEntity player = (PlayerEntity) entity;
-            ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
-            MinecraftServer server = serverPlayer.server;
-            if (!player.level.isClientSide) { // Работаем только на стороне сервера
-                int lives = getPlayerLivesFromScoreboard(player);
-                if (lives > 1) {
-                    updatePlayerLives(player, lives - 1);
-                } else {
-                    ServerEvents.executeCommandOnServer(server,
-                            "gamemode spectator " + serverPlayer.getName().getString());
-                }
-            }
-        }
-
-    }
+    
 
     @SubscribeEvent
     public void onAdvancement(AdvancementEvent event) {

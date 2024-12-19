@@ -31,6 +31,7 @@ public class LifeRootMod {
     public LifeRootMod() {
         // Регистрация событий
         MinecraftForge.EVENT_BUS.register(this);
+        NetworkHandler.register();
         if (FMLEnvironment.dist == Dist.CLIENT) {
             new KeyHandler();
         }

@@ -11,6 +11,12 @@ import net.minecraftforge.fml.common.Mod;
 
 @Mod.EventBusSubscriber(modid = LifeRootMod.MOD_ID, value = Dist.CLIENT)
 public class GlobalLivesHUD {
+    private static int currentLives = 0;
+
+    public static void updateLivesDisplay(int lives) {
+        currentLives = lives;
+        showLives();
+    }
 
     private static boolean showLives = false;
     private static long displayEndTime = 0;
@@ -30,10 +36,9 @@ public class GlobalLivesHUD {
 
             MatrixStack matrixStack = event.getMatrixStack();
             Minecraft mc = Minecraft.getInstance();
-            int lives = ManageLives.getPlayerLivesFromScoreboard(mc.player);
 
             // Рисуем текст на экране
-            String message = "Lives: " + lives;
+            String message = "Lives: " + currentLives;
             AbstractGui.drawString(matrixStack, mc.font, message, 10, 10, 0xFFFFFF);
         }
     }

@@ -1,20 +1,17 @@
 package com.kolaps.globallives;
 
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.ServerPlayerEntity;
-import net.minecraft.scoreboard.Score;
-import net.minecraft.scoreboard.ScoreCriteria;
-import net.minecraft.scoreboard.ScoreObjective;
-import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.entity.*;
+import net.minecraft.nbt.CompoundNBT;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.StringTextComponent;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.RegistryEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.network.PacketDistributor;
 
 @Mod.EventBusSubscriber(modid = LifeRootMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class ManageLives {
@@ -24,66 +21,57 @@ public class ManageLives {
     public ManageLives() {
         // Регистрация событий
         MinecraftForge.EVENT_BUS.register(this);
-
     }
 
-    public static void updatePlayerLives(PlayerEntity player, int lives) {
+    public static void setPlayerLives(PlayerEntity player, int lives) {
         if (!player.level.isClientSide) {
-            // Получение Scoreboard
-            Scoreboard scoreboard = player.getScoreboard();
+            CompoundNBT persistentData = player.getPersistentData();
+            CompoundNBT data = persistentData.getCompound(PlayerEntity.PERSISTED_NBT_TAG);
 
-            // Создание или получение Objectives для жизней
-            ScoreObjective livesObjective = scoreboard.getObjective(LIVES_TAG);
-            if (livesObjective == null) {
-                livesObjective = scoreboard.addObjective(
-                        LIVES_TAG,
-                        ScoreCriteria.DUMMY,
-                        new StringTextComponent("Global Lives"),
-                        ScoreCriteria.RenderType.INTEGER);
+            data.putInt(LIVES_TAG, lives);
+            persistentData.put(PlayerEntity.PERSISTED_NBT_TAG, data);
+            if (player instanceof ServerPlayerEntity) {
+                syncPlayerLives((ServerPlayerEntity) player);
             }
-
-            // Установка значения
-            Score score = scoreboard.getOrCreatePlayerScore(player.getName().getString(), livesObjective);
-            score.setScore(lives);
         }
     }
 
-    public static int getPlayerLivesFromScoreboard(PlayerEntity player) {
-        Scoreboard scoreboard = player.getScoreboard();
-        ScoreObjective livesObjective = scoreboard.getObjective(LIVES_TAG);
+    public static int getPlayerLives(PlayerEntity player) {
+        CompoundNBT persistentData = player.getPersistentData();
+        CompoundNBT data = persistentData.getCompound(PlayerEntity.PERSISTED_NBT_TAG);
 
-        if (livesObjective != null) {
-            Score score = scoreboard.getOrCreatePlayerScore(player.getName().getString(), livesObjective);
-            int lives = score.getScore();
-            if(lives > 0)
+        if (data.contains(LIVES_TAG)) {
+            int lives = data.getInt(LIVES_TAG);
+            if(lives>0)
             {
                 return lives;
             }
             else
             {
-                return -1;
+                return 0;
             }
         }
 
-        return -1; // Возвращаем начальное значение, если Objective отсутствует
+        return -1; // Возвращаем -1, если данных нет
+    }
+
+    public static void syncPlayerLives(ServerPlayerEntity player) {
+        int lives = getPlayerLives(player);
+        NetworkHandler.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new SyncLivesPacket(lives));
     }
 
     @SubscribeEvent
     public void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
         PlayerEntity player = event.getPlayer();
-        ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
-        MinecraftServer server = serverPlayer.server;
 
         if (!player.level.isClientSide) {
-
-            // Если данных о жизнях нет, задаём значение по умолчанию
-            // int lives = getPlayerLivesFromScoreboard(player)==-1 ?
-            // ServerEvents.executeCommandOnServer(server,"scoreboard objectives setdisplay
-            // list ad.Lives") : INITIAL_LIVES;
-            if (getPlayerLivesFromScoreboard(player) == -1) {
-                updatePlayerLives(player, INITIAL_LIVES);
-                ServerEvents.executeCommandOnServer(server, "scoreboard objectives setdisplay list " + LIVES_TAG);
+            int lives = getPlayerLives(player);
+            if (lives == -1) {
+                setPlayerLives(player, INITIAL_LIVES);
+                player.displayClientMessage(new StringTextComponent("Lives initialized to " + INITIAL_LIVES), true);
+                return;
             }
+            setPlayerLives(player, lives);
         }
     }
 
@@ -94,16 +82,17 @@ public class ManageLives {
             PlayerEntity player = (PlayerEntity) entity;
             ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
             MinecraftServer server = serverPlayer.server;
-            if (!player.level.isClientSide) { // Работаем только на стороне сервера
-                int lives = getPlayerLivesFromScoreboard(player);
+
+            if (!player.level.isClientSide) { // Работаем только на серверной стороне
+                int lives = getPlayerLives(player);
                 if (lives > 1) {
-                    updatePlayerLives(player, lives - 1);
+                    setPlayerLives(player, lives - 1);
                 } else {
-                    ServerEvents.executeCommandOnServer(server,
+                    setPlayerLives(player, 0);
+                    server.getCommands().performCommand(server.createCommandSourceStack(), 
                             "gamemode spectator " + serverPlayer.getName().getString());
                 }
             }
         }
-
     }
 }

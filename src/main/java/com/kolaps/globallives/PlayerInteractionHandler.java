@@ -24,10 +24,8 @@ public class PlayerInteractionHandler {
 
                 // Execute the command from the server context
                 ServerWorld serverWorld = (ServerWorld) player.level;
-                serverWorld.getServer().getCommands().performCommand(
-                    serverWorld.getServer().createCommandSourceStack(),
-                    "scoreboard players add " + player.getName().getString() + " GlobalLives 1"
-                );
+                int lives = ManageLives.getPlayerLives(player) + 1;
+                ManageLives.setPlayerLives(player, lives);
 
                 // Cancel further processing of the event
                 event.setCanceled(true);

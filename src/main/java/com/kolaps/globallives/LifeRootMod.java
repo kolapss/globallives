@@ -34,7 +34,7 @@ public class LifeRootMod {
         NetworkHandler.register();
         if (FMLEnvironment.dist == Dist.CLIENT) {
             new KeyHandler();
-    
+
         }
 
     }
@@ -47,8 +47,10 @@ public class LifeRootMod {
 
             // Фильтрация: исключаем рецепты
             if (!id.getNamespace().equals("minecraft") || !id.getPath().startsWith("recipes")) {
-                // Выдаем предмет за каждое уникальное достижение
-                event.getPlayer().addItem(new ItemStack(EtherealPage, 1));
+                ItemStack itemStack = new ItemStack(EtherealPage, 1);
+
+                // Используем placeItemBackInInventory для корректного добавления
+                event.getPlayer().inventory.placeItemBackInInventory(event.getPlayer().level, itemStack);
             }
         }
     }

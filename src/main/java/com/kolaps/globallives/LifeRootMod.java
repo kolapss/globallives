@@ -34,6 +34,7 @@ public class LifeRootMod {
         NetworkHandler.register();
         if (FMLEnvironment.dist == Dist.CLIENT) {
             new KeyHandler();
+    
         }
 
     }

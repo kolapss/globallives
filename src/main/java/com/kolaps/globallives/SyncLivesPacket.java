@@ -1,12 +1,10 @@
 package com.kolaps.globallives;
 
-import com.kolaps.globallives.ManageLives;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.client.entity.player.ClientPlayerEntity;
+import net.minecraft.entity.player.*;
 import net.minecraft.network.PacketBuffer;
-import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.fml.network.NetworkEvent;
-import net.minecraftforge.fml.network.PacketDistributor;
 
 import java.util.function.Supplier;
 
@@ -32,7 +30,7 @@ public class SyncLivesPacket {
         NetworkEvent.Context context = contextSupplier.get();
         if (context.getDirection().getReceptionSide() == LogicalSide.CLIENT) {
             context.enqueueWork(() -> {
-                PlayerEntity player = net.minecraft.client.Minecraft.getInstance().player;
+                ClientPlayerEntity player = net.minecraft.client.Minecraft.getInstance().player;
                 if (player != null) {
                     GlobalLivesHUD.updateLivesDisplay(packet.lives);
                 }

@@ -11,11 +11,7 @@ import net.minecraft.world.server.ServerWorld;
 public class ServerEvents {
     
     // Обработчик события запуска сервера
-    @SubscribeEvent
-    public static void onServerStarting(FMLServerStartingEvent event) {
-        MinecraftServer server = event.getServer(); // Получаем сервер
-        executeCommandOnServer(server, "scoreboard objectives setdisplay list GlobalLives"); // Выполняем команду
-    }
+    
 
     // Функция для выполнения команды
     public static void executeCommandOnServer(MinecraftServer server, String command) {

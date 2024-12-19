@@ -54,7 +54,15 @@ public class ManageLives {
 
         if (livesObjective != null) {
             Score score = scoreboard.getOrCreatePlayerScore(player.getName().getString(), livesObjective);
-            return score.getScore();
+            int lives = score.getScore();
+            if(lives > 0)
+            {
+                return lives;
+            }
+            else
+            {
+                return -1;
+            }
         }
 
         return -1; // Возвращаем начальное значение, если Objective отсутствует

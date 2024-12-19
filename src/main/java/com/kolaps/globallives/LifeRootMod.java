@@ -11,12 +11,14 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.scoreboard.*;
 import net.minecraft.entity.*;
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.AdvancementEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.loading.FMLEnvironment;
 
 @Mod(LifeRootMod.MOD_ID)
 public class LifeRootMod {
@@ -29,10 +31,11 @@ public class LifeRootMod {
     public LifeRootMod() {
         // Регистрация событий
         MinecraftForge.EVENT_BUS.register(this);
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            new KeyHandler();
+        }
 
     }
-
-    
 
     @SubscribeEvent
     public void onAdvancement(AdvancementEvent event) {

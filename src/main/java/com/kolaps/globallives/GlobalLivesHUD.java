@@ -35,10 +35,17 @@ public class GlobalLivesHUD {
 
             MatrixStack matrixStack = event.getMatrixStack();
             Minecraft mc = Minecraft.getInstance();
+            int screenWidth = mc.getWindow().getGuiScaledWidth();
+            int screenHeight = mc.getWindow().getGuiScaledHeight();
+            String message = "Lives: " + currentLives;
+            // Вычисляем позицию для центрирования текста по горизонтали и размещения чуть
+            // выше инвентаря
+            int textWidth = mc.font.width(message);
+            int x = (screenWidth - textWidth) / 2;
+            int y = screenHeight - 60; // Регулируйте отступ от нижнего края экрана
 
             // Рисуем текст на экране
-            String message = "Lives: " + currentLives;
-            AbstractGui.drawString(matrixStack, mc.font, message, 10, 10, 0xFFFFFF);
+            AbstractGui.drawString(matrixStack, mc.font, message, x, y, 0xFFFFFF);
         }
     }
 }

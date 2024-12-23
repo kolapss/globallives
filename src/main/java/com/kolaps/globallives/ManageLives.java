@@ -1,12 +1,17 @@
 package com.kolaps.globallives;
 
+import java.util.Map;
+import java.util.HashMap;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.nbt.CompoundNBT;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.StringTextComponent;
+import net.minecraft.world.GameType;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -15,8 +20,9 @@ import net.minecraftforge.fml.network.PacketDistributor;
 
 @Mod.EventBusSubscriber(modid = LifeRootMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class ManageLives {
-    private static final int INITIAL_LIVES = 3;
+    private static final int INITIAL_LIVES = 1;
     public static final String LIVES_TAG = "GlobalLives";
+    private final Map<ServerPlayerEntity, ServerPlayerEntity> spectatorMap = new HashMap<>();
 
     public ManageLives() {
         // Регистрация событий
@@ -42,12 +48,9 @@ public class ManageLives {
 
         if (data.contains(LIVES_TAG)) {
             int lives = data.getInt(LIVES_TAG);
-            if(lives>0)
-            {
+            if (lives > 0) {
                 return lives;
-            }
-            else
-            {
+            } else {
                 return 0;
             }
         }
@@ -72,6 +75,28 @@ public class ManageLives {
                 return;
             }
             setPlayerLives(player, lives);
+            // Восстанавливаем информацию о привязке камеры
+            CompoundNBT persistentData = player.getPersistentData();
+            CompoundNBT data = persistentData.getCompound(PlayerEntity.PERSISTED_NBT_TAG);
+
+            if (data.contains("SpectatorTarget")) {
+                String targetUUID = data.getString("SpectatorTarget");
+                ServerPlayerEntity targetPlayer = player.getServer().getPlayerList().getPlayers().stream()
+                        .filter(p -> p.getUUID().toString().equals(targetUUID))
+                        .findFirst()
+                        .orElse(null);
+                        ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
+                if (targetPlayer != null) {
+                    serverPlayer.setGameMode(GameType.SPECTATOR);
+                    serverPlayer.setCamera(targetPlayer);
+                    spectatorMap.put(serverPlayer, targetPlayer);
+                    player.sendMessage(
+                            new StringTextComponent("You are watching for " + targetPlayer.getName().getString()),
+                            player.getUUID());
+                } else {
+                    player.sendMessage(new StringTextComponent("The target player is no longer available."), player.getUUID());
+                }
+            }
         }
     }
 
@@ -89,8 +114,61 @@ public class ManageLives {
                     setPlayerLives(player, lives - 1);
                 } else {
                     setPlayerLives(player, 0);
-                    server.getCommands().performCommand(server.createCommandSourceStack(), 
-                            "gamemode spectator " + serverPlayer.getName().getString());
+                    serverPlayer.setGameMode(GameType.SPECTATOR);
+                    serverPlayer.sendMessage(new StringTextComponent("You have switched to spectator mode."),
+                            serverPlayer.getUUID());
+                    ServerPlayerEntity targetPlayer = serverPlayer.getServer().getPlayerList().getPlayers().stream()
+                            .filter(playerr -> !playerr.isSpectator() && !playerr.isDeadOrDying()
+                                    && playerr != serverPlayer)
+                            .findFirst()
+                            .orElse(null);
+                    if (targetPlayer != null) {
+                        serverPlayer.setCamera(targetPlayer); // Привязываем камеру к другому игроку
+                        spectatorMap.put(serverPlayer, targetPlayer); // Сохраняем связь
+
+                        // Сохраняем в NBT
+                        CompoundNBT persistentData = serverPlayer.getPersistentData();
+                        CompoundNBT data = persistentData.getCompound(PlayerEntity.PERSISTED_NBT_TAG);
+                        data.putString("SpectatorTarget", targetPlayer.getUUID().toString());
+                        persistentData.put(PlayerEntity.PERSISTED_NBT_TAG, data);
+
+                        serverPlayer.sendMessage(
+                                new StringTextComponent("You are watching for " + targetPlayer.getName().getString()),
+                                serverPlayer.getUUID());
+                    } else {
+                        serverPlayer.sendMessage(new StringTextComponent("There are no live players to watch."),
+                                serverPlayer.getUUID());
+                    }
+                }
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        PlayerEntity player = event.player;
+        if (player instanceof ServerPlayerEntity) {
+            ServerPlayerEntity deadPlayer = (ServerPlayerEntity) player;
+            if (spectatorMap.containsKey(deadPlayer)) {
+                ServerPlayerEntity targetPlayer = spectatorMap.get(deadPlayer);
+
+                // Проверяем, что камера осталась на целевом игроке
+                if (deadPlayer.getCamera() != targetPlayer) {
+                    deadPlayer.setCamera(targetPlayer);
+                }
+
+                // Если цель умерла, сбрасываем наблюдение
+                if (targetPlayer.isDeadOrDying() || targetPlayer.isSpectator()) {
+                    spectatorMap.remove(deadPlayer);
+
+                    // Удаляем привязку из NBT
+                    CompoundNBT persistentData = deadPlayer.getPersistentData();
+                    CompoundNBT data = persistentData.getCompound(PlayerEntity.PERSISTED_NBT_TAG);
+                    data.remove("SpectatorTarget");
+                    persistentData.put(PlayerEntity.PERSISTED_NBT_TAG, data);
+
+                    deadPlayer.sendMessage(new StringTextComponent("The player you were watching died."),
+                            deadPlayer.getUUID());
                 }
             }
         }

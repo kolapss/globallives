@@ -28,7 +28,6 @@ public class ManageLives {
     private static final int INITIAL_LIVES = 1;
     public static final String LIVES_TAG = "GlobalLives";
     private final Map<ServerPlayerEntity, ServerPlayerEntity> spectatorMap = new HashMap<>();
-    private final Map<ServerPlayerEntity, ServerPlayerEntity> updates = new HashMap<>();
 
     public ManageLives() {
         // Регистрация событий
@@ -78,7 +77,7 @@ public class ManageLives {
                 // Телепортируем замороженного игрока к новому живому игроку
                 frozenPlayer.teleportTo(player.getX(), player.getY(), player.getZ());
                 frozenPlayer.setCamera(player);
-                ServerPlayerEntity serverPlayer = (ServerPlayerEntity)player;
+                ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
                 spectatorMap.put(frozenPlayer, serverPlayer); // Обновляем связь
 
                 // Обновляем NBT
@@ -149,6 +148,7 @@ public class ManageLives {
             MinecraftServer server = serverPlayer.server;
 
             if (!player.level.isClientSide) { // Работаем только на серверной стороне
+                player.inventory.dropAll();
                 int lives = getPlayerLives(player);
                 if (lives > 1) {
                     setPlayerLives(player, lives - 1);
@@ -161,10 +161,14 @@ public class ManageLives {
                             .filter(playerr -> !playerr.isSpectator() && !playerr.isDeadOrDying()
                                     && playerr != serverPlayer)
                             .collect(Collectors.toList());
+                    Map<ServerPlayerEntity, ServerPlayerEntity> updates = new HashMap<>();
+                    for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : spectatorMap.entrySet()) {
+                        updates.put(entry.getKey(), entry.getValue());
+                    }
                     if (livePlayers.isEmpty()) {
                         frozePlayer(serverPlayer);
                         // Если цель умерла, сбрасываем наблюдение
-                        for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : spectatorMap.entrySet()) {
+                        for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : updates.entrySet()) {
                             ServerPlayerEntity curDeadPlayer = entry.getKey();
                             if (entry.getValue() == serverPlayer) {
                                 unbindPlayer(curDeadPlayer);
@@ -172,7 +176,7 @@ public class ManageLives {
                         }
                     } else {
                         ServerPlayerEntity targetPlayer = livePlayers.get(0);
-                        for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : spectatorMap.entrySet()) {
+                        for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : updates.entrySet()) {
                             ServerPlayerEntity curDeadPlayer = entry.getKey();
                             if (entry.getValue() == serverPlayer) {
                                 curDeadPlayer.setCamera(targetPlayer); // Привязываем камеру к другому игроку
@@ -248,8 +252,8 @@ public class ManageLives {
         // Получаем игрока, который вышел
         ServerPlayerEntity leftPlayer = (ServerPlayerEntity) event.getPlayer();
         if (!spectatorMap.isEmpty()) {
-            for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : spectatorMap.entrySet()) 
-            {
+            Map<ServerPlayerEntity, ServerPlayerEntity> updates = new HashMap<>();
+            for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : spectatorMap.entrySet()) {
                 updates.put(entry.getKey(), entry.getValue());
             }
             for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : updates.entrySet()) {

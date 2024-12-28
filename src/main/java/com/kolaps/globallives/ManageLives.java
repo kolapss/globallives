@@ -1,9 +1,13 @@
 package com.kolaps.globallives;
 
 import java.util.Map;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.vector.Vector3d;
@@ -14,19 +18,26 @@ import net.minecraft.nbt.CompoundNBT;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.StringTextComponent;
 import net.minecraft.world.GameType;
+import net.minecraft.world.Teleporter;
+import net.minecraft.world.World;
+import net.minecraft.world.server.ServerWorld;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.TickEvent.ServerTickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.network.PacketDistributor;
+import net.minecraft.block.NetherPortalBlock;
 
 @Mod.EventBusSubscriber(modid = LifeRootMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class ManageLives {
     private static final int INITIAL_LIVES = 1;
     public static final String LIVES_TAG = "GlobalLives";
+    private static final int DELAY_TICKS = 20; // Задержка на 1 секунду (20 тиков)
+    private int tickCounter = 0;
     private final Map<ServerPlayerEntity, ServerPlayerEntity> spectatorMap = new HashMap<>();
 
     public ManageLives() {
@@ -149,6 +160,7 @@ public class ManageLives {
 
             if (!player.level.isClientSide) { // Работаем только на серверной стороне
                 player.inventory.dropAll();
+                BlockPos serverPlayerPosition = serverPlayer.blockPosition();
                 int lives = getPlayerLives(player);
                 if (lives > 1) {
                     setPlayerLives(player, lives - 1);
@@ -171,15 +183,19 @@ public class ManageLives {
                         for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : updates.entrySet()) {
                             ServerPlayerEntity curDeadPlayer = entry.getKey();
                             if (entry.getValue() == serverPlayer) {
+                                curDeadPlayer.teleportTo(serverPlayerPosition.getX(), serverPlayerPosition.getY(),
+                                        serverPlayerPosition.getZ());
                                 unbindPlayer(curDeadPlayer);
                             }
                         }
                     } else {
+                        // Если к нам кто-то привязан, то перепревязываем их.
                         ServerPlayerEntity targetPlayer = livePlayers.get(0);
                         for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : updates.entrySet()) {
                             ServerPlayerEntity curDeadPlayer = entry.getKey();
                             if (entry.getValue() == serverPlayer) {
                                 curDeadPlayer.setCamera(targetPlayer); // Привязываем камеру к другому игроку
+                                spectatorMap.remove(curDeadPlayer);
                                 spectatorMap.put(curDeadPlayer, targetPlayer); // Сохраняем связь
 
                                 // Сохраняем в NBT
@@ -230,7 +246,7 @@ public class ManageLives {
 
     public void frozePlayer(ServerPlayerEntity serverPlayer) {
         // Нет других живых игроков, игрок становится "замороженным"
-        spectatorMap.put(serverPlayer, null); // Сохраняем, что игрок заморожен
+        // spectatorMap.put(serverPlayer, null); // Сохраняем, что игрок заморожен
 
         // Сохраняем состояние в NBT
         CompoundNBT persistentData = serverPlayer.getPersistentData();
@@ -251,6 +267,7 @@ public class ManageLives {
     public void onPlayerLogout(PlayerLoggedOutEvent event) {
         // Получаем игрока, который вышел
         ServerPlayerEntity leftPlayer = (ServerPlayerEntity) event.getPlayer();
+        BlockPos serverPlayerPosition = leftPlayer.blockPosition();
         if (!spectatorMap.isEmpty()) {
             Map<ServerPlayerEntity, ServerPlayerEntity> updates = new HashMap<>();
             for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : spectatorMap.entrySet()) {
@@ -259,7 +276,40 @@ public class ManageLives {
             for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : updates.entrySet()) {
                 ServerPlayerEntity curDeadPlayer = entry.getKey();
                 if (entry.getValue() == leftPlayer) {
+                    curDeadPlayer.teleportTo(serverPlayerPosition.getX(), serverPlayerPosition.getY(),
+                            serverPlayerPosition.getZ());
                     unbindPlayer(curDeadPlayer);
+                }
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public void onPlayerChangeDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        ServerPlayerEntity changedPlayer = (ServerPlayerEntity) event.getPlayer();
+
+        if (!spectatorMap.isEmpty()) {
+            Map<ServerPlayerEntity, ServerPlayerEntity> updates = new HashMap<>();
+            MinecraftServer server = changedPlayer.getServer();
+            for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : spectatorMap.entrySet()) {
+                updates.put(entry.getKey(), entry.getValue());
+            }
+
+            for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : updates.entrySet()) {
+                ServerPlayerEntity deadPlayer = entry.getKey();
+                CompoundNBT persistentData = deadPlayer.getPersistentData();
+                CompoundNBT data = persistentData.getCompound(PlayerEntity.PERSISTED_NBT_TAG);
+                String deadUUID = data.getString("SpectatorTarget");
+
+                if (deadUUID.trim().equals(changedPlayer.getUUID().toString().trim())) {
+                    System.out.println("tp " + deadPlayer.getName() + " " + changedPlayer.getName());
+                    spectatorMap.remove(deadPlayer);
+                    ServerEvents.executeCommandOnServer(server,
+                            "tp " + deadPlayer.getName().getString() + " " + changedPlayer.getName().getString());
+                    ServerPlayerEntity updatedDeadPlayer = server.getPlayerList().getPlayer(deadPlayer.getUUID());
+                    spectatorMap.put(updatedDeadPlayer, changedPlayer);
+
+                    tickCounter=0;
                 }
             }
         }
@@ -274,7 +324,10 @@ public class ManageLives {
             CompoundNBT data = persistentData.getCompound(PlayerEntity.PERSISTED_NBT_TAG);
             if (spectatorMap.containsKey(deadPlayer)) {
                 ServerPlayerEntity targetPlayer = spectatorMap.get(deadPlayer);
-
+                if (tickCounter < DELAY_TICKS) {
+                    tickCounter++;
+                    return;  // Возвращаемся до окончания задержки
+                }
                 if (deadPlayer.getCamera() != targetPlayer) {
                     deadPlayer.setCamera(targetPlayer);
                 }

@@ -1,16 +1,17 @@
+/*
+ * Существует 2 сущности. Мертвый игрок и живой игрок, когда у живого игрока заканчиваются жизни, то он превращается в мертвого игрока, то есть переходит
+ * в режим spectator, камера мертвого игрока устанавливается на живого игрока, мертвый игрок как бы вселяется в живого игрока.
+ */
+
 package com.kolaps.globallives;
 
 import java.util.Map;
-import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
-import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.vector.Vector3d;
+import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.ServerPlayerEntity;
@@ -18,25 +19,21 @@ import net.minecraft.nbt.CompoundNBT;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.StringTextComponent;
 import net.minecraft.world.GameType;
-import net.minecraft.world.Teleporter;
-import net.minecraft.world.World;
-import net.minecraft.world.server.ServerWorld;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.TickEvent.ServerTickEvent;
+import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.network.PacketDistributor;
-import net.minecraft.block.NetherPortalBlock;
 
 @Mod.EventBusSubscriber(modid = LifeRootMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class ManageLives {
     private static final int INITIAL_LIVES = 1;
     public static final String LIVES_TAG = "GlobalLives";
-    private static final int DELAY_TICKS = 20; // Задержка на 1 секунду (20 тиков)
+    private static final int DELAY_TICKS = 40; // Задержка на 1 секунду (20 тиков)
     private int tickCounter = 0;
     private final Map<ServerPlayerEntity, ServerPlayerEntity> spectatorMap = new HashMap<>();
 
@@ -154,35 +151,35 @@ public class ManageLives {
     public void onPlayerDeath(LivingDeathEvent event) {
         Entity entity = event.getEntity();
         if (entity instanceof PlayerEntity) {
-            PlayerEntity player = (PlayerEntity) entity;
-            ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
-            MinecraftServer server = serverPlayer.server;
+            PlayerEntity deadPlayer = (PlayerEntity) entity;
+            ServerPlayerEntity deadServerPlayer = (ServerPlayerEntity) deadPlayer;
+            MinecraftServer server = deadServerPlayer.server;
 
-            if (!player.level.isClientSide) { // Работаем только на серверной стороне
-                player.inventory.dropAll();
-                BlockPos serverPlayerPosition = serverPlayer.blockPosition();
-                int lives = getPlayerLives(player);
+            if (!deadPlayer.level.isClientSide) { // Работаем только на серверной стороне
+                deadPlayer.inventory.dropAll();
+                BlockPos serverPlayerPosition = deadServerPlayer.blockPosition();
+                int lives = getPlayerLives(deadPlayer);
                 if (lives > 1) {
-                    setPlayerLives(player, lives - 1);
+                    setPlayerLives(deadPlayer, lives - 1);
                 } else {
-                    setPlayerLives(player, 0);
-                    serverPlayer.setGameMode(GameType.SPECTATOR);
-                    serverPlayer.sendMessage(new StringTextComponent("You have switched to spectator mode."),
-                            serverPlayer.getUUID());
+                    setPlayerLives(deadPlayer, 0);
+                    deadServerPlayer.setGameMode(GameType.SPECTATOR);
+                    deadServerPlayer.sendMessage(new StringTextComponent("You have switched to spectator mode."),
+                            deadServerPlayer.getUUID());
                     List<ServerPlayerEntity> livePlayers = server.getPlayerList().getPlayers().stream()
                             .filter(playerr -> !playerr.isSpectator() && !playerr.isDeadOrDying()
-                                    && playerr != serverPlayer)
+                                    && playerr != deadServerPlayer)
                             .collect(Collectors.toList());
                     Map<ServerPlayerEntity, ServerPlayerEntity> updates = new HashMap<>();
                     for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : spectatorMap.entrySet()) {
                         updates.put(entry.getKey(), entry.getValue());
                     }
                     if (livePlayers.isEmpty()) {
-                        frozePlayer(serverPlayer);
-                        // Если цель умерла, сбрасываем наблюдение
+                        frozePlayer(deadServerPlayer);
+                        // Если игрок является целью для других игроков, сбрасываем наблюдение
                         for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : updates.entrySet()) {
                             ServerPlayerEntity curDeadPlayer = entry.getKey();
-                            if (entry.getValue() == serverPlayer) {
+                            if (entry.getValue() == deadServerPlayer) {
                                 curDeadPlayer.teleportTo(serverPlayerPosition.getX(), serverPlayerPosition.getY(),
                                         serverPlayerPosition.getZ());
                                 unbindPlayer(curDeadPlayer);
@@ -193,7 +190,7 @@ public class ManageLives {
                         ServerPlayerEntity targetPlayer = livePlayers.get(0);
                         for (Map.Entry<ServerPlayerEntity, ServerPlayerEntity> entry : updates.entrySet()) {
                             ServerPlayerEntity curDeadPlayer = entry.getKey();
-                            if (entry.getValue() == serverPlayer) {
+                            if (entry.getValue() == deadServerPlayer) {
                                 curDeadPlayer.setCamera(targetPlayer); // Привязываем камеру к другому игроку
                                 spectatorMap.remove(curDeadPlayer);
                                 spectatorMap.put(curDeadPlayer, targetPlayer); // Сохраняем связь
@@ -211,19 +208,19 @@ public class ManageLives {
                             }
                         }
                         // Есть другие живые игроки
-                        serverPlayer.setCamera(targetPlayer); // Привязываем камеру к другому игроку
-                        spectatorMap.put(serverPlayer, targetPlayer); // Сохраняем связь
+                        deadServerPlayer.setCamera(targetPlayer); // Привязываем камеру к другому игроку
+                        spectatorMap.put(deadServerPlayer, targetPlayer); // Сохраняем связь
 
                         // Сохраняем в NBT
-                        CompoundNBT persistentData = serverPlayer.getPersistentData();
+                        CompoundNBT persistentData = deadServerPlayer.getPersistentData();
                         CompoundNBT data = persistentData.getCompound(PlayerEntity.PERSISTED_NBT_TAG);
                         data.putString("SpectatorTarget", targetPlayer.getUUID().toString());
                         persistentData.put(PlayerEntity.PERSISTED_NBT_TAG, data);
 
-                        serverPlayer.sendMessage(
+                        deadServerPlayer.sendMessage(
                                 new StringTextComponent(
                                         "You are watching " + targetPlayer.getName().getString() + "."),
-                                serverPlayer.getUUID());
+                                deadServerPlayer.getUUID());
                     }
                 }
             }
@@ -302,14 +299,23 @@ public class ManageLives {
                 String deadUUID = data.getString("SpectatorTarget");
 
                 if (deadUUID.trim().equals(changedPlayer.getUUID().toString().trim())) {
-                    System.out.println("tp " + deadPlayer.getName() + " " + changedPlayer.getName());
+
                     spectatorMap.remove(deadPlayer);
-                    ServerEvents.executeCommandOnServer(server,
-                            "tp " + deadPlayer.getName().getString() + " " + changedPlayer.getName().getString());
+                    // Телепортируем "мертвого" игрока
+                    deadPlayer.teleportTo(
+                            changedPlayer.getLevel(), // Уровень (мир) игрока
+                            changedPlayer.getX(), // X-координата
+                            changedPlayer.getY(), // Y-координата
+                            changedPlayer.getZ(), // Z-координата
+                            changedPlayer.getViewYRot(1.0f), // Угол вращения по оси Y
+                            changedPlayer.getViewXRot(1.0f) // Угол наклона по оси X
+                    );
+
+                    // Обновляем объект игрока после пересоздания
                     ServerPlayerEntity updatedDeadPlayer = server.getPlayerList().getPlayer(deadPlayer.getUUID());
                     spectatorMap.put(updatedDeadPlayer, changedPlayer);
 
-                    tickCounter=0;
+                    tickCounter = 0;
                 }
             }
         }
@@ -326,7 +332,7 @@ public class ManageLives {
                 ServerPlayerEntity targetPlayer = spectatorMap.get(deadPlayer);
                 if (tickCounter < DELAY_TICKS) {
                     tickCounter++;
-                    return;  // Возвращаемся до окончания задержки
+                    return; // Возвращаемся до окончания задержки
                 }
                 if (deadPlayer.getCamera() != targetPlayer) {
                     deadPlayer.setCamera(targetPlayer);
